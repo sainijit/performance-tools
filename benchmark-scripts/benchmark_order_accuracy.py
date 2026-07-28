@@ -77,10 +77,10 @@ class OrderAccuracyBenchmark:
 
     def _capture_run_metadata(self) -> Dict:
         """
-        Snapshot the active model/precision/resolution configuration so every
-        results file is self-describing (which model this run actually measured).
-        Reads dine-in/.env for OVMS_MODEL_NAME and the image max_size baked into
-        vlm_client.py, without requiring the app to expose a new endpoint.
+        Snapshot the active model configuration so every results file is
+        self-describing. Captures OVMS_MODEL_NAME (from a compose-adjacent .env
+        when present), the target device, and the VLM image max_size (parsed from
+        src/services/vlm_client.py when present).
         """
         metadata = {
             "model_name": None,
@@ -403,13 +403,19 @@ class OrderAccuracyBenchmark:
         worker_results["per_image"] = {
             oid: {
                 "count": len(items),
-                "avg_accuracy": sum(i.get("accuracy_score") or 0 for i in items) / len(items),
-                "avg_latency_ms": sum(i.get("total_latency_ms") or 0 for i in items) / len(items),
+                "avg_accuracy": self._mean_of_present(items, "accuracy_score"),
+                "avg_latency_ms": self._mean_of_present(items, "total_latency_ms"),
             }
             for oid, items in per_image.items()
         }
 
         return worker_results
+
+    @staticmethod
+    def _mean_of_present(items: List[Dict], key: str) -> float:
+        """Average `key` over items where it is present and non-null; 0.0 if none."""
+        values = [i[key] for i in items if i.get(key) is not None]
+        return sum(values) / len(values) if values else 0.0
 
     @staticmethod
     def _percentile_stats(values: List[float]) -> Dict:
